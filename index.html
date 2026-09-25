@@ -193,6 +193,7 @@
     $('memo').value = '';
     if (!name) { $('status').textContent = ''; $('status').className = 'status'; render([]); return; }
     $('status').textContent = '読み込み中…'; $('status').className = 'status';
+    render([]);  // 受付の応答（数秒かかる）を待たずに日付を出しておく
     var week = weekStart;
     api({ action: 'get', name: name, weekDates: weekDates() })
       .then(function (res) {
@@ -200,9 +201,9 @@
         var rows = res.data;
         $('status').textContent = rows.length ? 'この週は提出済みです（直して送り直せます）' : '';
         $('status').className = 'status' + (rows.length ? ' done' : '');
-        render(rows);
+        if (rows.length) render(rows);  // 提出済みがなければ、読み込み中に入れた内容を消さない
       })
-      .catch(function () { $('status').textContent = '読み込めませんでした。入力はそのままできます'; render([]); });
+      .catch(function () { $('status').textContent = '読み込めませんでした。入力はそのままできます'; });
   }
 
   $('days').addEventListener('change', function (e) {
