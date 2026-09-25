@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>シフト入力</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #ffffff; --text: #222; --sub: #6b6b6b; --line: #e3e1dc;
+    --accent: #2f6f5e; --accent-weak: #e4efeb; --off: #c9c6bf; --danger: #b3412e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; font-size: 16px; line-height: 1.5; }
+  main { max-width: 480px; margin: 0 auto; padding: 16px 16px 120px; }
+  h1 { font-size: 20px; margin: 4px 0 16px; }
+  label.name { display: block; font-size: 14px; color: var(--sub); margin-bottom: 4px; }
+  input[type=text], textarea, select { font-size: 16px; font-family: inherit; color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px; background: var(--card); padding: 10px 12px; width: 100%; }
+  .week { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 8px; }
+  .week button { border: none; background: none; color: var(--accent); font-size: 15px; padding: 8px 4px; }
+  .week button:disabled { color: var(--off); }
+  .week strong { font-size: 17px; }
+  .status { font-size: 13px; color: var(--sub); text-align: center; min-height: 20px; margin-bottom: 8px; }
+  .status.done { color: var(--accent); }
+  .day { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; }
+  .day-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+  .state::before { content: "休み"; }
+  .day.on .state::before { content: "出勤"; color: var(--accent); font-weight: 600; }
+  .hint { font-size: 14px; color: var(--sub); margin: 0 0 8px; }
+  .day-name { font-size: 17px; font-weight: 600; }
+  .day-name .sat { color: #2d5ea8; } .day-name .sun { color: var(--danger); }
+  .toggle { position: relative; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--sub); cursor: pointer; }
+  .toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .toggle .sw { width: 48px; height: 28px; border-radius: 14px; background: var(--off); position: relative; transition: background .15s; }
+  .toggle .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: left .15s; }
+  .toggle input:checked + .sw { background: var(--accent); }
+  .toggle input:checked + .sw::after { left: 23px; }
+  .toggle input:focus-visible + .sw { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .times { display: none; align-items: center; gap: 8px; margin-top: 10px; }
+  .day.on .times { display: flex; }
+  .day.on { border-color: var(--accent); background: var(--accent-weak); }
+  .times select { flex: 1; }
+  .err { color: var(--danger); font-size: 13px; margin-top: 6px; display: none; }
+  .memo { margin-top: 16px; }
+  textarea { min-height: 64px; resize: vertical; }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+  .bar-inner { max-width: 480px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
+  .total { font-size: 14px; color: var(--sub); white-space: nowrap; }
+  .btn { flex: 1; border: none; border-radius: 10px; background: var(--accent); color: #fff; font-size: 17px; font-weight: 600; padding: 14px; cursor: pointer; }
+  .btn:disabled { opacity: .5; }
+  .btn.ghost { background: none; color: var(--accent); border: 1px solid var(--accent); }
+  .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; align-items: flex-end; justify-content: center; }
+  .sheet.show { display: flex; }
+  .sheet-body { background: var(--card); width: 100%; max-width: 480px; border-radius: 14px 14px 0 0; padding: 20px 16px calc(16px + env(safe-area-inset-bottom)); }
+  .sheet-body h2 { font-size: 18px; margin: 0 0 12px; }
+  .sheet-body ul { list-style: none; padding: 0; margin: 0 0 12px; }
+  .sheet-body li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .sheet-body .actions { display: flex; gap: 10px; margin-top: 12px; }
+  .note { font-size: 14px; color: var(--sub); }
+</style>
+</head>
+<body>
+<main>
+  <h1>シフト入力</h1>
+
+  <label class="name" for="name">お名前</label>
+  <input type="text" id="name" maxlength="30" placeholder="例：山田" autocomplete="name">
+
+  <div class="week">
+    <button type="button" id="prev">‹ 前の週</button>
+    <strong id="weekLabel"></strong>
+    <button type="button" id="next">次の週 ›</button>
+  </div>
+  <div class="status" id="status"></div>
+  <p class="hint">出勤する日をタップすると、時間を選べます。</p>
+
+  <div id="days"></div>
+
+  <div class="memo">
+    <label class="name" for="memo">ひとこと（任意）</label>
+    <textarea id="memo" maxlength="200" placeholder="例：10/2は早めに上がるかもしれません"></textarea>
+  </div>
+</main>
+
+<div class="bar">
+  <div class="bar-inner">
+    <span class="total" id="total">合計 0時間</span>
+    <button type="button" class="btn" id="submit">確認して送る</button>
+  </div>
+</div>
+
+<div class="sheet" id="confirm">
+  <div class="sheet-body">
+    <h2 id="confirmTitle">この内容で送りますか？</h2>
+    <ul id="confirmList"></ul>
+    <div class="note" id="confirmNote"></div>
+    <div class="actions">
+      <button type="button" class="btn ghost" id="back">戻る</button>
+      <button type="button" class="btn" id="send">送る</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 受付（Google Apps Script のウェブアプリ）のURL
+  var API_URL = 'https://script.google.com/macros/s/AKfycbwKjQVN3HMaGosOEY5sNBNtMTl8ssYYXR4FKeVrWQsMpA1u-H5ODXsXvXfA56mxZXrm/exec';
+  // 日本時間の今日（yyyy-MM-dd）
+  var TODAY = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date());
+
+  // text/plain で送ると事前確認（CORSのプリフライト）が起きず、GASにそのまま届く
+  function api(body) {
+    return fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json(); })
+      .then(function (res) { if (!res.ok) throw new Error(res.error || '受付でエラーが起きました'); return res; });
+  }
+  var WD = ['日', '月', '火', '水', '木', '金', '土'];
+  var TIMES = [];
+  for (var m = 7 * 60; m <= 22 * 60; m += 30) TIMES.push(pad(Math.floor(m / 60)) + ':' + pad(m % 60));
+
+  var store = {
+    get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+
+  // 日付は yyyy-MM-dd 文字列で扱い、端末のタイムゾーンに左右されないよう UTC で計算する
+  function pad(n) { return ('0' + n).slice(-2); }
+  function parse(ymd) { var p = ymd.split('-').map(Number); return new Date(Date.UTC(p[0], p[1] - 1, p[2])); }
+  function fmt(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()); }
+  function addDays(ymd, n) { var d = parse(ymd); d.setUTCDate(d.getUTCDate() + n); return fmt(d); }
+  function dow(ymd) { return parse(ymd).getUTCDay(); }
+  function md(ymd) { var d = parse(ymd); return (d.getUTCMonth() + 1) + '/' + d.getUTCDate(); }
+  function toMin(hm) { var p = hm.split(':'); return +p[0] * 60 + +p[1]; }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+
+  var thisMonday = addDays(TODAY, -((dow(TODAY) + 6) % 7));
+  var weekStart = addDays(thisMonday, 7);  // 初期表示は来週
+  var lastTimes = { start: store.get('shift.start') || '09:00', end: store.get('shift.end') || '17:00' };
+
+  var $ = function (id) { return document.getElementById(id); };
+  $('name').value = store.get('shift.name') || '佐藤';
+
+  function weekDates() { var a = []; for (var i = 0; i < 7; i++) a.push(addDays(weekStart, i)); return a; }
+
+  function options(sel) {
+    return TIMES.map(function (t) { return '<option' + (t === sel ? ' selected' : '') + '>' + t + '</option>'; }).join('');
+  }
+
+  function render(existing) {
+    var byDate = {};
+    (existing || []).forEach(function (s) { byDate[s.date] = s; });
+    var dates = weekDates();
+    $('weekLabel').textContent = md(dates[0]) + '(月)〜' + md(dates[6]) + '(日)';
+    $('prev').disabled = weekStart <= thisMonday;
+    $('days').innerHTML = dates.map(function (d) {
+      var s = byDate[d], w = dow(d);
+      var cls = w === 6 ? 'sat' : w === 0 ? 'sun' : '';
+      return '<div class="day' + (s ? ' on' : '') + '" data-date="' + d + '">' +
+        '<label class="day-head"><span class="day-name">' + md(d) + ' <span class="' + cls + '">(' + WD[w] + ')</span></span>' +
+        '<span class="toggle"><span class="state"></span><input type="checkbox"' + (s ? ' checked' : '') + '><span class="sw"></span></span></label>' +
+        '<div class="times"><select class="start" aria-label="開始">' + options(s ? s.start : lastTimes.start) + '</select>' +
+        '<span>〜</span><select class="end" aria-label="終了">' + options(s ? s.end : lastTimes.end) + '</select></div>' +
+        '<div class="err">終了は開始より後の時間にしてください</div></div>';
+    }).join('');
+    if (existing && existing.length && existing[0].memo) $('memo').value = existing[0].memo;
+    update();
+  }
+
+  function collect() {
+    var list = [], bad = false;
+    document.querySelectorAll('.day').forEach(function (el) {
+      var on = el.querySelector('input').checked;
+      el.classList.toggle('on', on);
+      var start = el.querySelector('.start').value, end = el.querySelector('.end').value;
+      var ng = on && toMin(start) >= toMin(end);
+      el.querySelector('.err').style.display = ng ? 'block' : 'none';
+      if (ng) bad = true;
+      if (on) list.push({ date: el.dataset.date, start: start, end: end });
+    });
+    return { list: list, bad: bad };
+  }
+
+  function update() {
+    var c = collect();
+    var total = c.list.reduce(function (s, x) { return s + (toMin(x.end) - toMin(x.start)) / 60; }, 0);
+    $('total').textContent = '合計 ' + total + '時間';
+    $('submit').disabled = c.bad;
+  }
+
+  function load() {
+    var name = $('name').value.trim();
+    $('memo').value = '';
+    if (!name) { $('status').textContent = ''; $('status').className = 'status'; render([]); return; }
+    $('status').textContent = '読み込み中…'; $('status').className = 'status';
+    var week = weekStart;
+    api({ action: 'get', name: name, weekDates: weekDates() })
+      .then(function (res) {
+        if (week !== weekStart) return;  // 読み込み中に週を切り替えた場合は捨てる
+        var rows = res.data;
+        $('status').textContent = rows.length ? 'この週は提出済みです（直して送り直せます）' : '';
+        $('status').className = 'status' + (rows.length ? ' done' : '');
+        render(rows);
+      })
+      .catch(function () { $('status').textContent = '読み込めませんでした。入力はそのままできます'; render([]); });
+  }
+
+  $('days').addEventListener('change', function (e) {
+    if (e.target.tagName === 'SELECT') {
+      var day = e.target.closest('.day');
+      lastTimes = { start: day.querySelector('.start').value, end: day.querySelector('.end').value };
+    }
+    update();
+  });
+  $('prev').onclick = function () { weekStart = addDays(weekStart, -7); load(); };
+  $('next').onclick = function () { weekStart = addDays(weekStart, 7); load(); };
+  $('name').addEventListener('change', function () { store.set('shift.name', $('name').value.trim()); load(); });
+
+  $('submit').onclick = function () {
+    var name = $('name').value.trim();
+    if (!name) { alert('お名前を入れてください'); $('name').focus(); return; }
+    var c = collect();
+    $('confirmTitle').textContent = md(weekStart) + '〜' + md(addDays(weekStart, 6)) + ' のシフトを送りますか？';
+    $('confirmList').innerHTML = c.list.length
+      ? c.list.map(function (s) { return '<li>' + md(s.date) + '(' + WD[dow(s.date)] + ')　' + s.start + '〜' + s.end + '</li>'; }).join('')
+      : '<li>この週は出勤なし</li>';
+    var memo = $('memo').value.trim();
+    $('confirmNote').textContent = memo ? 'ひとこと：' + memo : '';
+    $('confirm').classList.add('show');
+  };
+  $('back').onclick = function () { $('confirm').classList.remove('show'); };
+
+  $('send').onclick = function () {
+    var btn = $('send'); btn.disabled = true; btn.textContent = '送信中…';
+    var c = collect();
+    store.set('shift.name', $('name').value.trim());
+    store.set('shift.start', lastTimes.start); store.set('shift.end', lastTimes.end);
+    api({ action: 'submit', name: $('name').value.trim(), weekDates: weekDates(), shifts: c.list, memo: $('memo').value })
+      .then(function () {
+        $('confirm').classList.remove('show');
+        btn.disabled = false; btn.textContent = '送る';
+        $('status').textContent = '送信しました。ありがとうございます！';
+        $('status').className = 'status done';
+        window.scrollTo(0, 0);
+      })
+      .catch(function (err) {
+        btn.disabled = false; btn.textContent = '送る';
+        alert('送信できませんでした：' + (err && err.message ? err.message : err));
+      });
+  };
+
+  load();
+</script>
+</body>
+</html>
