@@ -58,6 +58,10 @@
   .sheet-body ul { list-style: none; padding: 0; margin: 0 0 12px; }
   .sheet-body li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .sheet-body .actions { display: flex; gap: 10px; margin-top: 12px; }
+  .done-body { text-align: center; }
+  .done-body ul { text-align: left; }
+  .done-mark { width: 56px; height: 56px; margin: 4px auto 8px; border-radius: 50%; background: var(--accent); color: #fff;
+    font-size: 32px; line-height: 56px; font-weight: 700; }
   .note { font-size: 14px; color: var(--sub); }
 </style>
 </head>
@@ -99,6 +103,19 @@
     <div class="actions">
       <button type="button" class="btn ghost" id="back">戻る</button>
       <button type="button" class="btn" id="send">送る</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="done">
+  <div class="sheet-body done-body">
+    <div class="done-mark" aria-hidden="true">✓</div>
+    <h2>送信しました</h2>
+    <p class="note" id="doneWeek"></p>
+    <ul id="doneList"></ul>
+    <p class="note">受け付けました。もう一度押す必要はありません。</p>
+    <div class="actions">
+      <button type="button" class="btn" id="doneClose">閉じる</button>
     </div>
   </div>
 </div>
@@ -233,22 +250,27 @@
 
   $('send').onclick = function () {
     var btn = $('send'); btn.disabled = true; btn.textContent = '送信中…';
+    $('back').disabled = true;  // 送信中は閉じさせない（閉じて「確認して送る」を連打されるのを防ぐ）
     var c = collect();
     store.set('shift.name', $('name').value.trim());
     store.set('shift.start', lastTimes.start); store.set('shift.end', lastTimes.end);
     api({ action: 'submit', name: $('name').value.trim(), weekDates: weekDates(), shifts: c.list, memo: $('memo').value })
       .then(function () {
+        $('doneWeek').textContent = $('confirmTitle').textContent.replace(' のシフトを送りますか？', ' のシフト');
+        $('doneList').innerHTML = $('confirmList').innerHTML;
         $('confirm').classList.remove('show');
-        btn.disabled = false; btn.textContent = '送る';
-        $('status').textContent = '送信しました。ありがとうございます！';
+        $('done').classList.add('show');
+        $('status').textContent = 'この週は提出済みです（直して送り直せます）';
         $('status').className = 'status done';
-        window.scrollTo(0, 0);
       })
       .catch(function (err) {
-        btn.disabled = false; btn.textContent = '送る';
         alert('送信できませんでした：' + (err && err.message ? err.message : err));
+      })
+      .then(function () {
+        btn.disabled = false; btn.textContent = '送る'; $('back').disabled = false;
       });
   };
+  $('doneClose').onclick = function () { $('done').classList.remove('show'); window.scrollTo(0, 0); };
 
   load();
 </script>
